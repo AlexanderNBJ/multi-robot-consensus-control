@@ -1,11 +1,10 @@
 import matplotlib
-matplotlib.use('Qt5Agg')
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 import math
 import json
-
-from matplotlib.animation import FuncAnimation
+from Visualizer import Visualizer
 
 class Simulator():
     n_robots                = None
@@ -65,11 +64,11 @@ class Simulator():
         return adjacency_list
 
     def get_algebraic_connectivity(self):
-
-        if self.algebraic_connectivity is not None:
-            return self.algebraic_connectivity
-
-        eigenvalues = np.sort(np.linalg.eigvals(self.graph_laplacian))
+        if self.graph_laplacian is None:
+            return 0
+        
+        eigenvalues = np.linalg.eigvalsh(self.graph_laplacian)
+        eigenvalues.sort()
 
         if len(eigenvalues) < 2:
             return 0
@@ -79,11 +78,13 @@ class Simulator():
     def simulate_rendezvous(self, dt=0.01, steps=500):
         curr_pos = np.array(self.initial_robot_positions, dtype=float)
         history = [[] for _ in range(self.n_robots)]
-
+        lambda2_history = []
+        
         for t in range(steps):
             for i in range(self.n_robots):
                 history[i].append(curr_pos[i].copy())
 
+            # creates the proximity graph based on the rendezvous_radius
             edges = []
             for i in range(self.n_robots):
                 for j in range(i + 1, self.n_robots):
@@ -91,12 +92,18 @@ class Simulator():
                     if dist <= self.rendezvous_radius:
                         edges.append([i, j])
             
+            # creates the laplacian matrix based on the proximity graph generated
             self.graph_edges = edges
             L = self.compute_laplacian(edges) 
+            
+            lambda2_history.append(self.get_algebraic_connectivity())
+            # current velocity of each robot
             velocity = -L.dot(curr_pos)
+            
+            # current position based on a approximation of velocity integral
             curr_pos += velocity * dt
 
-        return np.array(history)
+        return np.array(history), np.array(lambda2_history)
 
     def compute_laplacian(self, edges):
         n = self.n_robots
@@ -113,63 +120,19 @@ class Simulator():
 
             for neighbor in adj[i]:
                 L[i][neighbor] = -1
+        
+        self.graph_laplacian = L
         return L
-    
-    def plot_analysis(self, history, dt):
-        """ Gera o gráfico de distância em relação ao ponto de encontro """
-        steps = history.shape[1]
-        time_axis = np.linspace(0, steps * dt, steps)
-        
-        start_pos = history[:, 0, :]
-        meeting_point = np.mean(start_pos, axis=0)
 
-        plt.figure(figsize=(10, 5))
-        for i in range(self.n_robots):
-            distances = [np.linalg.norm(history[i, t] - meeting_point) for t in range(steps)]
-            plt.plot(time_axis, distances, label=f'Robô {i}')
-
-        plt.title('Distância de cada robô até o Ponto de Encontro')
-        plt.xlabel('Tempo (s)')
-        plt.ylabel('Distância')
-        plt.grid(True)
-        plt.legend()
-        plt.show()
-
-    def animate_rendezvous(self, history):
-        """ Cria a animação dos robôs convergindo """
-        fig, ax = plt.subplots(figsize=(7, 7))
-        
-        all_x = history[:, :, 0]
-        all_y = history[:, :, 1]
-        ax.set_xlim(np.min(all_x) - 1, np.max(all_x) + 1)
-        ax.set_ylim(np.min(all_y) - 1, np.max(all_y) + 1)
-        ax.set_title("Simulação de Rendezvous")
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.grid(True)
-
-        scatters = ax.scatter([], [], c='blue', s=50)
-        lines = [ax.plot([], [], '--', alpha=0.3)[0] for _ in range(self.n_robots)]
-
-        def update(frame):
-            for i in range(self.n_robots):
-                lines[i].set_data(history[i, :frame, 0], history[i, :frame, 1])
-            
-            curr_step_pos = history[:, frame, :]
-            scatters.set_offsets(curr_step_pos)
-            return lines + [scatters]
-
-        ani = FuncAnimation(fig, update, frames=history.shape[1], interval=20, blit=True)
-        plt.show()
-
-
-def main() -> None:
-
+def main():
     sim = Simulator()
     dt = 0.01
-    history = sim.simulate_rendezvous(dt=dt, steps=1000)
-    sim.plot_analysis(history, dt)
-    sim.animate_rendezvous(history)    
+    history, lambda2_history = sim.simulate_rendezvous(dt=dt, steps=100)
+
+    viz = Visualizer(history, dt, lambda2_history)
+    viz.plot_analysis()
+    viz.animate()
+    
 
 if __name__ == '__main__':
     main()
