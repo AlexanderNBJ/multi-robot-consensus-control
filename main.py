@@ -22,6 +22,7 @@ class Simulator():
 
                 self.n_robots = len(data['initial_robot_positions'])
                 self.initial_robot_positions = data['initial_robot_positions']
+                self.bias = data['bias']
 
                 if data['rendezvous_radius'] == 'INFINITY':
                     self.rendezvous_radius = math.inf
@@ -98,7 +99,7 @@ class Simulator():
             
             lambda2_history.append(self.get_algebraic_connectivity())
             # current velocity of each robot
-            velocity = -L.dot(curr_pos)
+            velocity = -L.dot(curr_pos) + self.bias
             
             # current position based on a approximation of velocity integral
             curr_pos += velocity * dt
@@ -127,7 +128,7 @@ class Simulator():
 def main():
     sim = Simulator()
     dt = 0.01
-    history, lambda2_history = sim.simulate_rendezvous(dt=dt, steps=100)
+    history, lambda2_history = sim.simulate_rendezvous(dt=dt, steps=200)
 
     viz = Visualizer(history, dt, lambda2_history)
     viz.plot_analysis()
