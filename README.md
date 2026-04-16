@@ -1,25 +1,10 @@
 # Consensus Strategies for Cooperative Multi-Robot Control
 
-This repository contains the source code and simulations developed during a **Scientific Initiation (IC)** research project at **CEFET-MG**. The primary goal is to investigate the performance of various multi-agent coordination strategies based on consensus algorithms.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
 
-## 📋 About the Project
-The project focuses on the development of a computational simulator to compare centralized and decentralized control strategies applied to different robot dynamic models (Single Integrator, Double Integrator, and Unicycle).
+Simulation framework for evaluating consensus algorithms in networked multi‑agent systems. Developed as part of a **Scientific Initiation (IC) research project** at **CEFET-MG**, under the supervision of **Prof. Dr. Tales Argolo Jesus**.
 
-## 🚀 Objectives
-1. Study agent dynamic models and neighborhood (network) topologies.
-2. Implement numerical integration algorithms for the simulation of dynamic systems.
-3. Develop a simulator for the comparative analysis of consensus protocols described in the literature.
-4. Document and publish research findings in major field conferences (e.g., CBA - Brazilian Congress of Automatics).
+## Overview
 
-## 🛠️ Tech Stack
-- **Python 3.12**
-- **NumPy / SciPy** (Numerical calculus and integration)
-- **Matplotlib** (Data visualization and simulation plotting)
-
-## 📌 Academic Context
-- **Institution:** Federal Center for Technological Education of Minas Gerais (CEFET-MG)
-- **Advisor:** Prof. Dr. Tales Argolo Jesus
-- **Grant:** PIBIC FAPEMIG (Research Fellowship)
-
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This repository provides a modular simulator to compare centralized and decentralized coordination strategies using different robot dynamic models (single integrator, double integrator, unicycle) and communication topologies. The implementation is based on classical consensus theory, emphasizing the role of algebraic connectivity, time delays, and switching networks.
