@@ -5,7 +5,7 @@ from matplotlib.patches import Patch
 from sklearn.decomposition import PCA
 
 class Visualizer:
-    def __init__(self, history, dt, lambda2_history=None, edges_history = None):
+    def __init__(self, history, dt, lambda2_history=None, edges_history=None, target_fps=10):
         self.history = history
         self.dt = dt
         self.lambda2_history = lambda2_history
@@ -13,6 +13,11 @@ class Visualizer:
         self.n_robots, self.n_steps, self.dim = history.shape
         self.robot_colors = plt.cm.tab10(np.linspace(0, 1, self.n_robots))
         self.meeting_point = np.mean(self.history[:, 0, :], axis=0)
+        
+        self.target_fps = target_fps
+        self.interval = int(1000 / self.target_fps) # Tempo em ms entre os frames da tela
+        self.stride = max(1, int((1.0 / self.target_fps) / self.dt))        
+        self.n_frames_anim = self.n_steps // self.stride
 
     def plot_analysis(self):
         steps = self.n_steps
@@ -81,7 +86,10 @@ class Visualizer:
         handles.append(plt.Line2D([0], [0], color='red', linestyle='--', label='Rendezvous point'))
         ax.legend(handles=handles)
 
-        def update(frame):
+        def update(anim_frame):
+            # Encontra qual o índice real no array history
+            frame = anim_frame * self.stride
+
             for i in range(self.n_robots):
                 x_vals = self.history[i, :frame, 0]
                 y_vals = np.zeros_like(x_vals)
@@ -99,7 +107,7 @@ class Visualizer:
             
             return lines + [scatters, time_text, lambda_text]
 
-        ani = FuncAnimation(fig, update, frames=self.n_steps, interval=20, blit=True)
+        ani = FuncAnimation(fig, update, frames=self.n_frames_anim, interval=self.interval, blit=True)
         plt.show()
 
     def _animate_2d(self):
@@ -144,7 +152,10 @@ class Visualizer:
         handles.append(plt.Line2D([0], [0], marker='x', color='red', linestyle='None', label='Rendezvous point'))
         ax.legend(handles=handles)
 
-        def update(frame):
+        def update(anim_frame):
+            # Encontra qual o índice real no array history
+            frame = anim_frame * self.stride
+
             # 1. Atualiza as trilhas
             for i in range(self.n_robots):
                 trail_lines[i].set_data(self.history[i, :frame, 0], self.history[i, :frame, 1])
@@ -155,14 +166,11 @@ class Visualizer:
 
             # 3. Atualiza as arestas (se existirem)
             if self.edges_history is not None:
-                # Primeiro, esconde todas as arestas
                 for line in edge_line_dict.values():
                     line.set_data([], [])
-                # Agora desenha as arestas ativas neste frame
                 for u, v in self.edges_history[frame]:
                     x = [self.history[u, frame, 0], self.history[v, frame, 0]]
                     y = [self.history[u, frame, 1], self.history[v, frame, 1]]
-                    # Garante que a chave seja ordenada (menor, maior)
                     key = (u, v) if u < v else (v, u)
                     if key in edge_line_dict:
                         edge_line_dict[key].set_data(x, y)
@@ -174,11 +182,10 @@ class Visualizer:
             else:
                 lambda_text.set_text('λ₂ = N/A')
 
-            # Retorna todos os artistas que mudaram (para blit=True)
             artists = [scatters, time_text, lambda_text] + trail_lines + edge_lines
             return artists
 
-        ani = FuncAnimation(fig, update, frames=self.n_steps, interval=20, blit=True)
+        ani = FuncAnimation(fig, update, frames=self.n_frames_anim, interval=self.interval, blit=True)
         plt.show()
     
     def _animate_3d(self):
@@ -221,7 +228,10 @@ class Visualizer:
         handles.append(plt.Line2D([0], [0], marker='x', color='red', linestyle='None', label='Rendezvous point'))
         ax.legend(handles=handles)
 
-        def update(frame):
+        def update(anim_frame):
+            # Encontra qual o índice real no array history
+            frame = anim_frame * self.stride
+
             for i in range(self.n_robots):
                 x_vals = self.history[i, :frame, 0]
                 y_vals = self.history[i, :frame, 1]
@@ -253,7 +263,7 @@ class Visualizer:
                 lambda_text.set_text('λ₂ = N/A')
             return lines + [scatters, time_text, lambda_text]
 
-        ani = FuncAnimation(fig, update, frames=self.n_steps, interval=20, blit=False)
+        ani = FuncAnimation(fig, update, frames=self.n_frames_anim, interval=self.interval, blit=False)
         plt.show()
 
     def _animate_pca(self):

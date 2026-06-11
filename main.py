@@ -1,272 +1,253 @@
+import argparse
+import json
+import logging
+import sys
+import numpy as np
 import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 import numpy as np
 import math
-import json
+import itertools
+import logging
+matplotlib.use('TkAgg')
 from Visualizer import Visualizer
+from Engine import *
 
-class Simulator():
-    n_robots                = None
-    graph_edges             = None
-    is_undirected           = None
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
 
-    adjascency_list         = None
-    graph_laplacian         = None
-    algebraic_connectivity  = None
+def generate_preset_positions(preset: str, params: dict):
+    """Gera posições iniciais baseadas no preset do JSON."""
+    n = params.get('n_robots', 5)
+    dim = params.get('dim', 2)
+    center = np.array(params.get('center', [0]*dim)[:dim], dtype=float)
 
-    def __init__(self):
-        try:
-            with open('config.json') as file:
-                data = json.load(file)
-                
-                if 'preset' in data:
-                    preset = data['preset']
-                    params = data.get('preset_params', {})
-                    self.initial_robot_positions = self.generate_preset_positions(preset, params)
-                    self.n_robots = len(self.initial_robot_positions)
-                else:
-                    self.initial_robot_positions = data['initial_robot_positions']
-                    self.n_robots = len(self.initial_robot_positions)
+    if n <= 0:
+        raise ValueError("n_robots deve ser positivo")
 
-                self.bias = data.get('bias', [])
-                pos_array = np.array(self.initial_robot_positions, dtype=float)
-                if not self.bias:
-                    self.bias = np.zeros_like(pos_array)
-                else:
-                    self.bias = np.array(self.bias, dtype=float)
-                    if self.bias.shape != pos_array.shape:
-                        raise ValueError(f"Bias shape {self.bias.shape} does not match positions shape {pos_array.shape}")
-
-                if str(data['rendezvous_radius']).upper() == 'INFINITY':
-                    self.rendezvous_radius = math.inf
-                else:
-                    self.rendezvous_radius = float(data['rendezvous_radius'])
-                
-                fixed_raw = data.get('fixed_edges', [])
-                prohibited_raw = data.get('prohibited_edges', [])
-                
-                max_index = self.n_robots - 1
-                self.fixed_edges = []
-                for u, v in fixed_raw:
-                    if u <= max_index and v <= max_index:
-                        self.fixed_edges.append((u, v) if u < v else (v, u))
-                if len(self.fixed_edges) < len(fixed_raw):
-                    print("Warning: some fixed edges were ignored due to invalid indices.")
-                
-                self.prohibited_edges = []
-                for u, v in prohibited_raw:
-                    if u <= max_index and v <= max_index:
-                        self.prohibited_edges.append((u, v) if u < v else (v, u))
-                if len(self.prohibited_edges) < len(prohibited_raw):
-                    print("Warning: some prohibited edges were ignored due to invalid indices.")
-                
-                self.use_proximity = data.get('use_proximity', True)
-                
-                if not self.use_proximity and len(self.fixed_edges) == 0:
-                    print("Warning: No edges defined and 'use_proximity' is off. Robots will not communicate!")
-                
-        except Exception as e:
-            print(e)
-            exit(1)
-        
-    def generate_preset_positions(self, preset, params):
-        n = params.get('n_robots', 5)
-        dim = params.get('dim', 2)
-
-        center = list(params.get('center', [0]*dim))
-        if len(center) < dim:
-            center.extend([0] * (dim - len(center)))
-        center = np.array(center[:dim])
-
-        if n <= 0:
-            raise ValueError("n_robots deve ser positivo")
-
-        if preset == 'ring':
-            radius = params.get('radius', 5.0)
-            positions = []
-            for i in range(n):
-                angle = 2 * np.pi * i / n
-                pos = [center[0] + radius * np.cos(angle),
-                    center[1] + radius * np.sin(angle)]
-                if dim == 3:
-                    pos.append(center[2])
-                positions.append(pos)
-            return positions
-
-        elif preset == 'line':
-            length = params.get('length', 10.0)
-            start = center - length/2
-            end   = center + length/2
-            positions = [start + (end - start) * i / max(n-1, 1) for i in range(n)]
-            return [p.tolist() for p in positions]
-
-        elif preset == 'grid':
-            rows = params.get('rows', int(np.sqrt(n)))
-            cols = params.get('cols', int(np.ceil(n / rows)))
-            spacing = params.get('spacing', 1.0)
-            positions = []
-            for i in range(rows):
-                for j in range(cols):
-                    if len(positions) >= n:
-                        break
-                    x = center[0] + (j - (cols-1)/2) * spacing
-                    y = center[1] + (i - (rows-1)/2) * spacing
-                    if dim == 3:
-                        positions.append([x, y, center[2]])
-                    else:
-                        positions.append([x, y])
-            return positions[:n]
-
-        elif preset == 'sphere':
-            radius = params.get('radius', 5.0)
-            positions = []
-            if n == 1:
-                pos = [center[0], center[1] + radius] if dim == 2 else [center[0], center[1] + radius, center[2]]
-                return [pos]
-            phi = np.pi * (3. - np.sqrt(5.))
-            for i in range(n):
-                y = 1 - (i / (n - 1)) * 2
-                radius_y = np.sqrt(1 - y*y)
-                theta = phi * i
-                x = np.cos(theta) * radius_y
-                z = np.sin(theta) * radius_y
-                pos = [center[0] + radius * x,
-                    center[1] + radius * y,
-                    center[2] + radius * z]
-                if dim == 2:
-                    pos = pos[:2]
-                positions.append(pos)
-            return positions
-
-        elif preset == 'random':
-            box_size = params.get('box_size', 10.0)
-            low = center - box_size/2
-            high = center + box_size/2
-            positions = np.random.uniform(low, high, size=(n, dim)).tolist()
-            return positions
-
-        else:
-            raise ValueError(f"Preset desconhecido: {preset}")
+    if preset == 'random':
+        box_size = params.get('box_size', 10.0)
+        low = center - box_size / 2
+        high = center + box_size / 2
+        return np.random.uniform(low, high, size=(n, dim)).tolist()    
     
-    def get_graph_laplacian(self):
+    raise ValueError(f"Preset desconhecido ou não implementado: {preset}")
 
-        if self.graph_laplacian is not None:
-            return self.graph_laplacian
+def parse_vector_parameter(data_val, n_robots, dim, default_val=0.0):
+    """
+    Interpreta configurações de vetores (como bias e offsets) de forma flexível.
+    Suporta: Ausência, Broadcasting (1 vetor para todos), Matriz Completa ou Matriz Esparsa (dict).
+    """
+    if data_val is None:
+        return np.full((n_robots, dim), default_val)
 
-        robots_quantity = len(self.adjascency_list)
-        laplacian = np.zeros([robots_quantity, robots_quantity])
-
-        for i in range(robots_quantity):
-            laplacian[i][i] = len(self.adjascency_list[i])
-
-            for neighbor in self.adjascency_list[i]:
-                laplacian[i][neighbor] = -1
-        return laplacian
-
-    def get_adjacency_list(self):
-
-        if self.adjascency_list is not None:
-            return self.adjascency_list
-
-        adjacency_list = {i: [] for i in range(0, self.n_robots)}
-
-        for u, v in self.graph_edges:
-            if v not in adjacency_list[u]:
-                adjacency_list[u].append(v)
-
-            if u not in adjacency_list[v] and self.is_undirected:
-                adjacency_list[v].append(u)
-
-        return adjacency_list
-
-    def get_algebraic_connectivity(self):
-        if self.graph_laplacian is None:
-            return 0
+    if isinstance(data_val, list):
+        data_array = np.array(data_val, dtype=float)
         
-        eigenvalues = np.linalg.eigvalsh(self.graph_laplacian)
-        eigenvalues.sort()
+        if data_array.ndim == 1:
+            if len(data_array) != dim:
+                raise ValueError(f"Tamanho do vetor {len(data_array)} não bate com a dimensão {dim}.")
+            return np.tile(data_array, (n_robots, 1))
+            
+        elif data_array.ndim == 2:
+            if data_array.shape != (n_robots, dim):
+                raise ValueError(f"Esperada matriz ({n_robots}, {dim}), mas recebeu {data_array.shape}.")
+            return data_array
 
-        if len(eigenvalues) < 2:
-            return 0
-        
-        return eigenvalues[1]
-    
-    def simulate_rendezvous(self, dt=0.01, steps=500):
-        curr_pos = np.array(self.initial_robot_positions, dtype=float)
-        history = [[] for _ in range(self.n_robots)]
-        lambda2_history = []
-        edges_history = []
-        
-        for t in range(steps):
-            for i in range(self.n_robots):
-                history[i].append(curr_pos[i].copy())
-
-            edges_set = set()
-
-            if self.use_proximity:
-                for i in range(self.n_robots):
-                    for j in range(i + 1, self.n_robots):
-                        dist = np.linalg.norm(curr_pos[i] - curr_pos[j])
-                        if dist <= self.rendezvous_radius:
-                            edges_set.add((i, j))
-
-            for u, v in self.fixed_edges:
-                if u < v:
-                    edges_set.add((u, v))
+    if isinstance(data_val, dict):
+        matrix = np.full((n_robots, dim), default_val)
+        for key, val in data_val.items():
+            idx = int(key)
+            if 0 <= idx < n_robots:
+                vec = np.array(val, dtype=float)
+                if len(vec) == dim:
+                    matrix[idx] = vec
                 else:
-                    edges_set.add((v, u))
+                    raise ValueError(f"Vetor no índice {idx} não bate com a dimensão {dim}.")
+        return matrix
 
-            prohibited = set()
-            if self.prohibited_edges:
-                for u, v in self.prohibited_edges:
-                    if u < v:
-                        prohibited.add((u, v))
-                    else:
-                        prohibited.add((v, u))
-                edges_set -= prohibited
+    raise ValueError(f"Formato não suportado para o parâmetro: {type(data_val)}")
 
-            edges = [list(pair) for pair in edges_set]
-            edges_history.append(edges)
-            
-            L = self.compute_laplacian(edges) 
-            lambda2_history.append(self.get_algebraic_connectivity())
-
-            velocity = -L.dot(curr_pos) + self.bias
-            
-
-            curr_pos += velocity * dt
-
-        return np.array(history), np.array(lambda2_history), edges_history
+def generate_preset_positions(preset: str, params: dict) -> list:
+    """
+    Fábrica geométrica multi-dimensional para posições iniciais.
+    Gera as coordenadas e retorna como lista de listas (compatível com JSON/Engine).
+    """
+    n = params.get('n_robots', 5)
+    dim = params.get('dim', 2)
     
-    def compute_laplacian(self, edges):
-        n = self.n_robots
-        adj = {i: [] for i in range(n)}
+    if n <= 0 or dim <= 0:
+        raise ValueError(f"Dimensão ({dim}) e número de robôs ({n}) devem ser positivos.")
 
-        for u, v in edges:
-            adj[u].append(v)
-            adj[v].append(u)
-            
-        L = np.zeros([n, n])
+    raw_center = params.get('center', [0.0] * dim)
+    center = np.array(raw_center, dtype=float)[:dim]
+    if len(center) < dim:
+        center = np.pad(center, (0, dim - len(center)), 'constant')
 
-        for i in range(n):
-            L[i][i] = len(adj[i])
+    preset = preset.lower()
+    
+    if preset in ['random', 'random_uniform']:
+        box_size = params.get('box_size', 10.0)
+        low = center - (box_size / 2)
+        high = center + (box_size / 2)
+        return np.random.uniform(low, high, size=(n, dim)).tolist()
 
-            for neighbor in adj[i]:
-                L[i][neighbor] = -1
+    elif preset in ['gaussian', 'random_gaussian']:
+        std_dev = params.get('std_dev', 2.0)
+        return (center + np.random.normal(scale=std_dev, size=(n, dim))).tolist()
+
+    elif preset == 'hypersphere_volume':
+        radius = params.get('radius', 5.0)
+        points = np.random.normal(size=(n, dim))
+        norms = np.linalg.norm(points, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        surface = points / norms
         
-        self.graph_laplacian = L
-        return L
+        u = np.random.uniform(size=(n, 1))
+        scale = radius * (u ** (1.0 / dim))
+        return (center + surface * scale).tolist()
+
+    elif preset == 'hypersphere_surface':
+        radius = params.get('radius', 5.0)
+        points = np.random.normal(size=(n, dim))
+        norms = np.linalg.norm(points, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return (center + (points / norms) * radius).tolist()
+
+    elif preset == 'line':
+        length = params.get('length', 10.0)
+        raw_dir = params.get('direction', [1.0] + [0.0]*(dim-1))
+        direction = np.array(raw_dir, dtype=float)[:dim]
+        if len(direction) < dim:
+            direction = np.pad(direction, (0, dim - len(direction)), 'constant')
+            
+        norm = np.linalg.norm(direction)
+        direction = direction / norm if norm > 0 else np.zeros(dim)
+        
+        t = np.linspace(-length/2, length/2, n)
+        return (center + np.outer(t, direction)).tolist()
+
+    elif preset in ['regular_polygon', 'ring']:
+        radius = params.get('radius', 5.0)
+        angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+        pts = np.zeros((n, dim))
+        pts[:, 0] = np.cos(angles) * radius
+        if dim > 1:
+            pts[:, 1] = np.sin(angles) * radius
+        return (center + pts).tolist()
+
+    elif preset == 'spiral':
+        turns = params.get('turns', 3.0)
+        spacing = params.get('spacing', 1.0)
+        t = np.linspace(0.1, turns * 2 * np.pi, n)
+        r = spacing * t / (2 * np.pi)
+        
+        pts = np.zeros((n, dim))
+        pts[:, 0] = r * np.cos(t)
+        if dim > 1:
+            pts[:, 1] = r * np.sin(t)
+        if dim > 2:
+            height = params.get('height', 10.0)
+            pts[:, 2] = np.linspace(-height/2, height/2, n)
+        return (center + pts).tolist()
+
+    elif preset == 'grid':
+        spacing = params.get('spacing', 2.0)
+        m = math.ceil(n ** (1.0 / dim))
+        
+        if m ** dim > 1_000_000:
+            logging.warning(f"Grid {dim}D para {n} robôs causaria estouro de memória. Usando random_uniform como fallback.")
+            return generate_preset_positions('random_uniform', params)
+
+        axes = [np.arange(m) * spacing for _ in range(dim)]
+        mesh = np.meshgrid(*axes, indexing='ij')
+        points = np.vstack([x.flatten() for x in mesh]).T
+        
+        points = points - np.mean(points, axis=0) + center
+        return points[:n].tolist()
+
+    else:
+        raise ValueError(f"Preset desconhecido: '{preset}'. Verifique o config.json.")
+
+def build_simulator_from_dict(data: dict) -> 'SimulatorEngine':
+    """Monta o motor de simulação lendo o dicionário."""
+    if 'preset' in data:
+        initial_positions = generate_preset_positions(data['preset'], data.get('preset_params', {}))
+    else:
+        initial_positions = data.get('initial_robot_positions', [])
+
+    n_robots = len(initial_positions)
+    dim = len(initial_positions[0]) if n_robots > 0 else 2
+
+    import math
+    raw_radius = data.get('rendezvous_radius', 1.0)
+    radius = math.inf if str(raw_radius).upper() == 'INFINITY' else float(raw_radius)
+
+    topology = NetworkTopology(
+        use_proximity=data.get('use_proximity', True),
+        rendezvous_radius=radius,
+        fixed_edges=data.get('fixed_edges', []),
+        prohibited_edges=data.get('prohibited_edges', [])
+    )
+    
+    offsets = parse_vector_parameter(data.get('formation_offsets'), n_robots, dim)
+    bias = parse_vector_parameter(data.get('bias'), n_robots, dim)
+    
+    abs_offsets = parse_vector_parameter(data.get('formation_offsets'), n_robots, dim)
+    rel_offsets = parse_vector_parameter(data.get('relative_offsets'), n_robots, dim, default_val=None)
+
+    controller = ConsensusController(
+        offsets=abs_offsets if rel_offsets is None else None,
+        bias=bias,
+        angular_velocity=data.get('angular_velocity', 0.0),
+        rotation_center_index=data.get('rotation_center_index'),
+        relative_offsets=rel_offsets
+    )
+    return SimulatorEngine(initial_positions, topology, controller)
 
 def main():
-    sim = Simulator()
-    dt = 0.01
-    history, lambda2_history, edges_history = sim.simulate_rendezvous(dt=dt, steps=500)
+    parser = argparse.ArgumentParser(description="Simulador de Rendezvous de Robôs Multi-Agentes")
+    parser.add_argument(
+        '-c', '--config', 
+        type=str, 
+        required=True, 
+        help="Caminho para o arquivo JSON de configuração (ex: config_halo.json)"
+    )
+    parser.add_argument('--dt', type=float, default=0.01, help="Passo de tempo da simulação")
+    parser.add_argument('--steps', type=int, default=1000, help="Número de passos da simulação")
+    parser.add_argument('--no-plot', action='store_true', help="Roda a simulação sem abrir os gráficos")
 
-    viz = Visualizer(history, dt, lambda2_history, edges_history)
-    viz.plot_analysis()
-    viz.animate()
-    
+    args = parser.parse_args()
+
+    try:
+        with open(args.config, 'r') as file:
+            config_data = json.load(file)
+            logging.info(f"Configuração carregada com sucesso: {args.config}")
+    except Exception as e:
+        logging.error(f"Falha ao ler o arquivo de configuração: {e}")
+        sys.exit(1)
+
+    try:
+        sim = build_simulator_from_dict(config_data)
+        logging.info(f"Iniciando simulação com {sim.n_robots} robôs em {sim.dim}D.")
+        logging.info(f"Integrando {args.steps} passos com dt={args.dt}...")
+        
+        history, lambda2_history, edges_history = sim.run(dt=args.dt, steps=args.steps)
+        logging.info("Simulação concluída.")
+
+    except Exception as e:
+        logging.error(f"Erro durante a execução da simulação: {e}")
+        sys.exit(1)
+
+    if not args.no_plot:
+        logging.info("Iniciando visualizador...")
+        viz = Visualizer(history, args.dt, lambda2_history, edges_history)
+        viz.animate()
+        viz.plot_analysis()
+    else:
+        logging.info("Visualização ignorada (--no-plot ativado).")
 
 if __name__ == '__main__':
     main()
