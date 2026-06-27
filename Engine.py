@@ -1,14 +1,14 @@
 import numpy as np
-import math
 
 class ConsensusController:
-    def __init__(self, offsets=None, bias=None, angular_velocity=0.0, rotation_center_index=None, relative_offsets=None):
+    def __init__(self, offsets=None, bias=None, angular_velocity=0.0, rotation_center_index=None, relative_offsets=None, damping=1.0):
         self.offsets = np.array(offsets) if offsets is not None else None
         self.bias = np.array(bias) if bias is not None else None
         self.omega = angular_velocity
         self.rotation_center_index = rotation_center_index
         self.relative_offsets = np.array(relative_offsets) if relative_offsets is not None else None
         self.angle = 0.0
+        self.damping = damping
 
     def compute_velocities(self, positions, laplacian, dt):
         n, dim = positions.shape
@@ -34,9 +34,9 @@ class ConsensusController:
         else:
             targets = np.tile(center, (n, 1))
 
-        velocity = -laplacian.dot(positions - targets) + self.bias
+        control_force = -laplacian.dot(positions - targets) + self.bias
 
-        return velocity
+        return control_force
 
     def _rotate_offsets(self, rel_offsets, cos_a, sin_a):
         rotated = rel_offsets.copy()
@@ -85,17 +85,21 @@ class NetworkTopology:
         return edges, L
     
     def get_algebraic_connectivity(self, laplacian):
-        eigenvalues = np.linalg.eigvalsh(laplacian)
+        eigenvalues = np.linalg.eigvals(laplacian)
         eigenvalues.sort()
+        print('\n------------ eigenvalues:')
+        print(eigenvalues)
         return eigenvalues[1] if len(eigenvalues) >= 2 else 0.0
 
 class SimulatorEngine:
-    def __init__(self, initial_positions, topology: NetworkTopology, controller: ConsensusController):
+    def __init__(self, initial_positions, topology: NetworkTopology, controller: ConsensusController, dynamics_order=1):
         self.positions = np.array(initial_positions, dtype=float)
         self.n_robots, self.dim = self.positions.shape
+        self.velocities = np.zeros_like(self.positions)
         
         self.topology = topology
         self.controller = controller
+        self.dynamics_order = dynamics_order
 
     def run(self, dt=0.01, steps=500):
         history = np.zeros((self.n_robots, steps, self.dim))
@@ -103,32 +107,28 @@ class SimulatorEngine:
         edges_history = []
 
         curr_pos = self.positions.copy()
+        curr_vel = self.velocities.copy()
 
         for t in range(steps):
+            
             history[:, t, :] = curr_pos
             
             edges, L = self.topology.compute_edges_and_laplacian(curr_pos)
             edges_history.append(edges)
+            self.topology.get_algebraic_connectivity(L)
             lambda2_history[t] = self.topology.get_algebraic_connectivity(L)
-            velocities = self.controller.compute_velocities(curr_pos, L, dt)
+            
+            control_input = self.controller.compute_velocities(curr_pos, L, dt)
 
-            curr_pos += velocities * dt
+            if self.dynamics_order == 2:
+                damping = getattr(self.controller, 'damping', 1.0)
+                acceleration = control_input - damping * curr_vel
+                curr_vel += acceleration * dt
+                curr_pos += curr_vel * dt
+            else:
+                curr_pos += control_input * dt
+
+        self.positions = curr_pos
+        self.velocities = curr_vel
 
         return history, lambda2_history, edges_history
-
-def build_simulator_from_dict(data: dict) -> SimulatorEngine:
-    initial_positions = data.get('initial_robot_positions', [])
-    
-    topology = NetworkTopology(
-        use_proximity=data.get('use_proximity', True),
-        rendezvous_radius=data.get('rendezvous_radius', math.inf),
-        fixed_edges=data.get('fixed_edges', []),
-        prohibited_edges=data.get('prohibited_edges', [])
-    )
-    
-    controller = ConsensusController(
-        offsets=np.array(data.get('formation_offsets')) if 'formation_offsets' in data else None,
-        bias=np.array(data.get('bias')) if 'bias' in data else None
-    )
-    
-    return SimulatorEngine(initial_positions, topology, controller)

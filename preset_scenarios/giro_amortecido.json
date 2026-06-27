@@ -1,0 +1,27 @@
+{
+    "preset": "random",
+    "preset_params": {
+        "n_robots": 7,
+        "dim": 2,
+        "center": [0.0, 0.0],
+        "box_size": 15.0
+    },
+    "use_proximity": true,
+    "rendezvous_radius": 15.0,
+    "fixed_edges": [],
+    "prohibited_edges": [],
+    "bias": [0.0, 0.0],
+    "angular_velocity": -3.0,
+    "rotation_center_index": 0,
+    "dynamics_order": 2,
+    "damping": 1.8,
+    "relative_offsets": [
+        [0.0, 0.0],
+        [5.0, 0.0],
+        [2.5, 4.33],
+        [-2.5, 4.33],
+        [-5.0, 0.0],
+        [-2.5, -4.33],
+        [2.5, -4.33]
+    ]
+}

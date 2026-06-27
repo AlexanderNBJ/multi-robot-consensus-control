@@ -4,10 +4,7 @@ import logging
 import sys
 import numpy as np
 import matplotlib
-import numpy as np
 import math
-import itertools
-import logging
 matplotlib.use('TkAgg')
 from Visualizer import Visualizer
 from Engine import *
@@ -18,28 +15,7 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 
-def generate_preset_positions(preset: str, params: dict):
-    """Gera posições iniciais baseadas no preset do JSON."""
-    n = params.get('n_robots', 5)
-    dim = params.get('dim', 2)
-    center = np.array(params.get('center', [0]*dim)[:dim], dtype=float)
-
-    if n <= 0:
-        raise ValueError("n_robots deve ser positivo")
-
-    if preset == 'random':
-        box_size = params.get('box_size', 10.0)
-        low = center - box_size / 2
-        high = center + box_size / 2
-        return np.random.uniform(low, high, size=(n, dim)).tolist()    
-    
-    raise ValueError(f"Preset desconhecido ou não implementado: {preset}")
-
 def parse_vector_parameter(data_val, n_robots, dim, default_val=0.0):
-    """
-    Interpreta configurações de vetores (como bias e offsets) de forma flexível.
-    Suporta: Ausência, Broadcasting (1 vetor para todos), Matriz Completa ou Matriz Esparsa (dict).
-    """
     if data_val is None:
         return np.full((n_robots, dim), default_val)
 
@@ -71,10 +47,6 @@ def parse_vector_parameter(data_val, n_robots, dim, default_val=0.0):
     raise ValueError(f"Formato não suportado para o parâmetro: {type(data_val)}")
 
 def generate_preset_positions(preset: str, params: dict) -> list:
-    """
-    Fábrica geométrica multi-dimensional para posições iniciais.
-    Gera as coordenadas e retorna como lista de listas (compatível com JSON/Engine).
-    """
     n = params.get('n_robots', 5)
     dim = params.get('dim', 2)
     
@@ -172,7 +144,6 @@ def generate_preset_positions(preset: str, params: dict) -> list:
         raise ValueError(f"Preset desconhecido: '{preset}'. Verifique o config.json.")
 
 def build_simulator_from_dict(data: dict) -> 'SimulatorEngine':
-    """Monta o motor de simulação lendo o dicionário."""
     if 'preset' in data:
         initial_positions = generate_preset_positions(data['preset'], data.get('preset_params', {}))
     else:
@@ -192,7 +163,6 @@ def build_simulator_from_dict(data: dict) -> 'SimulatorEngine':
         prohibited_edges=data.get('prohibited_edges', [])
     )
     
-    offsets = parse_vector_parameter(data.get('formation_offsets'), n_robots, dim)
     bias = parse_vector_parameter(data.get('bias'), n_robots, dim)
     
     abs_offsets = parse_vector_parameter(data.get('formation_offsets'), n_robots, dim)
@@ -203,9 +173,13 @@ def build_simulator_from_dict(data: dict) -> 'SimulatorEngine':
         bias=bias,
         angular_velocity=data.get('angular_velocity', 0.0),
         rotation_center_index=data.get('rotation_center_index'),
-        relative_offsets=rel_offsets
+        relative_offsets=rel_offsets,
+        damping=data.get('damping', 1.0)
     )
-    return SimulatorEngine(initial_positions, topology, controller)
+    
+    dynamics_order = data.get('dynamics_order', 1)
+    
+    return SimulatorEngine(initial_positions, topology, controller, dynamics_order=dynamics_order)
 
 def main():
     parser = argparse.ArgumentParser(description="Simulador de Rendezvous de Robôs Multi-Agentes")
@@ -213,7 +187,7 @@ def main():
         '-c', '--config', 
         type=str, 
         required=True, 
-        help="Caminho para o arquivo JSON de configuração (ex: config_halo.json)"
+        help="Caminho para o arquivo JSON de configuração"
     )
     parser.add_argument('--dt', type=float, default=0.01, help="Passo de tempo da simulação")
     parser.add_argument('--steps', type=int, default=1000, help="Número de passos da simulação")
@@ -232,7 +206,7 @@ def main():
     try:
         sim = build_simulator_from_dict(config_data)
         logging.info(f"Iniciando simulação com {sim.n_robots} robôs em {sim.dim}D.")
-        logging.info(f"Integrando {args.steps} passos com dt={args.dt}...")
+        logging.info(f"Integrando {args.steps} passos com dt={args.dt} usando dinâmica de ordem {sim.dynamics_order}...")
         
         history, lambda2_history, edges_history = sim.run(dt=args.dt, steps=args.steps)
         logging.info("Simulação concluída.")
