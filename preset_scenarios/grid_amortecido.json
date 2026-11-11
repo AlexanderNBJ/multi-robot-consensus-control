@@ -1,0 +1,16 @@
+{
+    "preset": "grid",
+    "preset_params": {
+        "n_robots": 4,
+        "dim": 2,
+        "center": [0.0, 0.0],
+        "spacing": 4.0
+    },
+    "use_proximity": true,
+    "rendezvous_radius": 10.0,
+    "fixed_edges": [],
+    "prohibited_edges": [],
+    "bias": [0.0, 0.0],
+    "dynamics_order": 2,
+    "damping": 0.5
+}

@@ -1,0 +1,15 @@
+{
+    "preset": "random",
+    "preset_params": { "n_robots": 5, "dim": 2, "box_size": 8.0 },
+    "use_proximity": false,
+    "fixed_edges": [[0,1],[0,2],[0,3],[0,4]],
+    "angular_velocity": 1.0,
+    "rotation_center_index": 0,
+    "relative_offsets": [
+        [0,0],
+        [3,0],
+        [0,3],
+        [-3,0],
+        [0,-3]
+    ]
+}
