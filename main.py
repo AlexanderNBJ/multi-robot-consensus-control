@@ -176,7 +176,8 @@ def build_simulator_from_dict(data: dict) -> 'MultiAgentSimulator':
         input_bias=bias,               # Nomenclatura atualizada
         omega=data.get('angular_velocity', 0.0),
         rotation_center=data.get('rotation_center_index'),
-        relative_offsets=rel_offsets
+        relative_offsets=rel_offsets,
+        use_atan=data.get('use_atan', False)
     )
     
     dynamics_order = data.get('dynamics_order', 1)

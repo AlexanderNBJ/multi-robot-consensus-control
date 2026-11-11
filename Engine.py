@@ -5,7 +5,7 @@ class ConsensusProtocol:
     Protocolo de controle cooperativo distribuído.
     Implementa as leis de consenso P, PD ou PID descritas em Chen & Ren (2019) e Olfati-Saber (2007).
     """
-    def __init__(self, kp=1.0, ki=0.0, kd=1.0, formation_offsets=None, input_bias=None, omega=0.0, rotation_center=None, relative_offsets=None):
+    def __init__(self, kp=1.0, ki=0.0, kd=1.0, formation_offsets=None, input_bias=None, omega=0.0, rotation_center=None, relative_offsets=None, use_atan=False):
         # Ganhos locais do Controlador Cooperativo (K_local)
         self.kp = kp
         self.ki = ki
@@ -19,6 +19,9 @@ class ConsensusProtocol:
         self.rotation_center = rotation_center
         self.relative_offsets = np.array(relative_offsets) if relative_offsets is not None else None
         self.angle = 0.0
+        
+        # Parâmetro de saturação por arcotangente
+        self.use_atan = use_atan
 
     def _compute_desired_states(self, X, n, dim, dt):
         """Calcula as posições desejadas p* (formation shape) para rastreamento."""
@@ -63,6 +66,11 @@ class ConsensusProtocol:
         
         # Lei de Controle Cooperativa Global
         U = - U_P - U_D - U_I + B_ext
+        
+        # Saturação via arcotangente [-1, 1]
+        if self.use_atan:
+            U = (2.0 / np.pi) * np.arctan(U)
+            
         return U
     
 class InteractionGraph:
