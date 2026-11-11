@@ -1,0 +1,16 @@
+{
+    "preset": "random",
+    "preset_params": {
+        "n_robots": 2,
+        "dim": 2,
+        "box_size": 20.0
+    },
+    "use_proximity": true,
+    "rendezvous_radius": "INFINITY",
+    "dynamics_order": 2,
+    "kp": 2.5,
+    "kd": 1.0,
+    "ki": 0.0,
+    "damping": 0.0,
+    "bias": [0.0, 0.0]
+}

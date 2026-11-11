@@ -1,0 +1,10 @@
+{
+  "initial_robot_positions": [
+    [0.0],
+    [10.0]
+  ],
+  "dynamics_order": 2,
+  "kp": 1.0,
+  "kd": 1.5,
+  "rendezvous_radius": "INFINITY"
+}

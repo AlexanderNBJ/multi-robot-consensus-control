@@ -1,0 +1,15 @@
+{
+    "preset": "random",
+    "preset_params": {
+        "n_robots": 9,
+        "radius": 40.0,
+        "dim": 2
+    },
+    "use_proximity": true,
+    "rendezvous_radius": 12,
+    "dynamics_order": 2,
+    "kp": 0.25,
+    "kd": 0.25,
+    "ki": 0.0,
+    "damping": 2
+}
